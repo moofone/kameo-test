@@ -11,7 +11,9 @@ use kameo::{
 };
 use kameo_test::backend::pplns::{PplnsActor, Shutdown};
 use log::{error, info};
-use serde::ser::StdError;
+// use serde::ser::StdError;
+use std::error::Error as StdError;
+
 use tokio::{signal, time::interval};
 
 #[derive(Clone)]
@@ -56,7 +58,10 @@ impl Actor for ConsumerActor {
         id: u64,
         reason: ActorStopReason,
     ) -> Result<Option<ActorStopReason>, Box<dyn std::error::Error + Send + Sync>> {
-        info!("on_link_died called with id: {}, reason: {:?}", id, reason);
+        info!(
+            "ConsumerActor: on_link_died called with id: {}, reason: {:?}",
+            id, reason
+        );
         if id == self.pplns_actor.id() {
             info!("PPLNS actor with ID {} died: {:?}", id, reason);
             self.respawn_pplns_actor();

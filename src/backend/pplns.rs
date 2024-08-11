@@ -45,6 +45,15 @@ impl Actor for PplnsActor {
             ctx.id(),
             reason
         );
+        if let Some(actor_ref) = ctx.upgrade() {
+            let links = actor_ref.as_ref().lock().await;
+            info!("PplnsActor has {} links", links.len());
+            for (id, _) in links.iter() {
+                info!("PplnsActor is linked to actor with ID: {}", id);
+            }
+        } else {
+            warn!("Failed to upgrade WeakActorRef in PplnsActor on_stop");
+        }
         Ok(())
     }
 }
