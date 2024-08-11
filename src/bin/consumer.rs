@@ -31,9 +31,11 @@ impl Actor for ConsumerActor {
         ctx: ActorRef<Self>,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         info!("ConsumerActor started. Linking PPLNS actor as child.");
-        // ctx.link_child(&self.pplns_actor).await;
-        ctx.link_together(&self.pplns_actor).await;
-
+        ctx.link_child(&self.pplns_actor).await;
+        info!(
+            "PPLNS actor linked as child with ID: {}",
+            self.pplns_actor.id()
+        );
         Ok(())
     }
 
@@ -49,8 +51,15 @@ impl Actor for ConsumerActor {
             self.respawn_pplns_actor();
             if let Some(actor_ref) = actor_ref.upgrade() {
                 actor_ref.link_child(&self.pplns_actor).await;
-                info!("Linked new PPLNS actor as child");
+                info!(
+                    "Linked new PPLNS actor as child with ID: {}",
+                    self.pplns_actor.id()
+                );
+            } else {
+                error!("Failed to upgrade WeakActorRef in on_link_died");
             }
+        } else {
+            info!("Received on_link_died for unknown actor ID: {}", id);
         }
         Ok(None)
     }
@@ -87,14 +96,7 @@ impl ConsumerActor {
                         if let Err(e) = self.pplns_actor.tell(Shutdown).send() {
                             error!("Failed to send shutdown signal to PPLNS actor: {:?}", e);
                         } else {
-                            // Wait for a moment to allow the PplnsActor to process the shutdown
-                            tokio::time::sleep(Duration::from_secs(2)).await;
-                            if !self.pplns_actor.is_alive() {
-                              // True but probably not the right way to detect its dead?
-                                info!("PPLNS actor is no longer alive after shutdown");
-                            } else {
-                                info!("PPLNS actor is still alive after shutdown");
-                            }
+                            info!("Shutdown signal sent to PPLNS actor");
                         }
                     } else {
                         info!("PPLNS actor is already not alive");
