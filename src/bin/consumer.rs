@@ -32,10 +32,21 @@ impl Actor for ConsumerActor {
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         info!("ConsumerActor started. Linking PPLNS actor as child.");
         ctx.link_child(&self.pplns_actor).await;
-        info!(
-            "PPLNS actor linked as child with ID: {}",
-            self.pplns_actor.id()
-        );
+
+        // Check if the child is actually linked
+        let links = ctx.as_ref().lock().await;
+        if links.contains_key(&self.pplns_actor.id()) {
+            info!(
+                "PPLNS actor successfully linked as child with ID: {}",
+                self.pplns_actor.id()
+            );
+        } else {
+            error!(
+                "Failed to link PPLNS actor as child with ID: {}",
+                self.pplns_actor.id()
+            );
+        }
+
         Ok(())
     }
 
@@ -120,11 +131,14 @@ impl ConsumerActor {
 #[tokio::main]
 async fn main() -> Result<()> {
     // Setup logging
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
+
+    info!("Starting application");
 
     // Create ConsumerActor
     let consumer_actor = ConsumerActor::new();
     let consumer_actor_ref = kameo::spawn(consumer_actor);
+    info!("ConsumerActor spawned with ID: {}", consumer_actor_ref.id());
 
     // Clone the actor reference for the run task
     let run_actor_ref = consumer_actor_ref.clone();
