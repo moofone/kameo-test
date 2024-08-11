@@ -40,7 +40,11 @@ impl Actor for PplnsActor {
         ctx: WeakActorRef<Self>,
         reason: ActorStopReason,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
-        info!("PplnsActor stopped: {:?}", reason);
+        info!(
+            "PplnsActor on_stop called with ID: {}, reason: {:?}",
+            ctx.id(),
+            reason
+        );
         Ok(())
     }
 }
@@ -54,6 +58,8 @@ impl Message<Shutdown> for PplnsActor {
     async fn handle(&mut self, _: Shutdown, ctx: Context<'_, Self, Self::Reply>) -> Self::Reply {
         info!("PplnsActor received shutdown signal");
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        info!("PplnsActor calling kill() on itself");
         ctx.actor_ref().kill();
+        info!("PplnsActor kill() called");
     }
 }
