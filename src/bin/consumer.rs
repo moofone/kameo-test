@@ -131,11 +131,11 @@ async fn main() -> Result<()> {
     });
 
     // Wait for interrupt signal
-    signal::ctrl_c().await?;
-    info!("Received interrupt signal, shutting down");
+    // signal::ctrl_c().await?;
+    // info!("Received interrupt signal, shutting down");
 
     // Stop the consumer actor gracefully
-    consumer_actor_ref.stop_gracefully().await?;
+    // consumer_actor_ref.stop_gracefully().await?;
 
     // Wait for the run handle to complete
     run_handle.await?;
