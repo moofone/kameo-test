@@ -33,11 +33,11 @@ impl Actor for ConsumerActor {
         ctx: ActorRef<Self>,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         info!("ConsumerActor started. Linking PPLNS actor as child.");
-        ctx.link_child(&self.pplns_actor).await;
+        self.pplns_actor.link_child(&ctx).await;
 
         // Check if the child is actually linked
-        let links = ctx.as_ref().lock().await;
-        if links.contains_key(&self.pplns_actor.id()) {
+        let links = self.pplns_actor.as_ref().lock().await;
+        if links.contains_key(&ctx.id()) {
             info!(
                 "PPLNS actor successfully linked as child with ID: {}",
                 self.pplns_actor.id()
@@ -81,13 +81,21 @@ impl Actor for ConsumerActor {
     }
 }
 
-pub struct Run;
+pub struct RunTick;
 
-impl Message<Run> for ConsumerActor {
-    type Reply = Result<()>;
+impl Message<RunTick> for ConsumerActor {
+    type Reply = ();
 
-    async fn handle(&mut self, _: Run, _ctx: Context<'_, Self, Self::Reply>) -> Self::Reply {
-        self.run().await
+    async fn handle(&mut self, _: RunTick, ctx: Context<'_, Self, Self::Reply>) -> Self::Reply {
+        self.run_tick();
+
+        let actor_ref = ctx.actor_ref();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            if let Err(e) = actor_ref.tell(RunTick).send() {
+                error!("Error running ConsumerActor: {:?}", e);
+            }
+        });
     }
 }
 
@@ -101,24 +109,16 @@ impl ConsumerActor {
         }
     }
 
-    pub async fn run(&self) -> Result<()> {
-        let mut shutdown_interval = interval(Duration::from_secs(10));
-
-        loop {
-            tokio::select! {
-                _ = shutdown_interval.tick() => {
-                    info!("Sending shutdown signal to PPLNS actor");
-                    if self.pplns_actor.is_alive() {
-                        if let Err(e) = self.pplns_actor.tell(Shutdown).send() {
-                            error!("Failed to send shutdown signal to PPLNS actor: {:?}", e);
-                        } else {
-                            info!("Shutdown signal sent to PPLNS actor");
-                        }
-                    } else {
-                        info!("PPLNS actor is already not alive");
-                    }
-                }
+    pub fn run_tick(&self) {
+        info!("Sending shutdown signal to PPLNS actor");
+        if self.pplns_actor.is_alive() {
+            if let Err(e) = self.pplns_actor.tell(Shutdown).send() {
+                error!("Failed to send shutdown signal to PPLNS actor: {:?}", e);
+            } else {
+                info!("Shutdown signal sent to PPLNS actor");
             }
+        } else {
+            info!("PPLNS actor is already not alive");
         }
     }
 
@@ -149,14 +149,12 @@ async fn main() -> Result<()> {
     let run_actor_ref = consumer_actor_ref.clone();
 
     // Run the consumer actor
-    let run_handle = tokio::spawn(async move {
-        if let Err(e) = run_actor_ref.ask(Run).send().await {
-            error!("Error running ConsumerActor: {:?}", e);
-        }
-    });
+    if let Err(e) = run_actor_ref.ask(RunTick).send().await {
+        error!("Error running ConsumerActor: {:?}", e);
+    }
 
     // Wait for the run handle to complete
-    run_handle.await?;
+    run_actor_ref.wait_for_stop().await;
 
     info!("Shutting down consumer");
     Ok(())
